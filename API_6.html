@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>疑義處方評估測驗</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: url('https://via.placeholder.com/1920x1080.png?text=%E8%83%8C%E6%99%AF2') no-repeat center center fixed;
+      background-size: cover;
+      font-family: "Noto Sans TC", sans-serif;
+    }
+
+    .chat-window {
+      position: absolute;
+      top: 130px;
+      right: 50px;
+      width: 65vw;
+      height: 75vh;
+      background-color: white;
+      border-radius: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .messages {
+      flex-grow: 1;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex-grow: 1;
+      padding: 10px;
+      font-size: 1rem;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+
+    .message {
+      margin-bottom: 10px;
+    }
+
+    .user {
+      color: #1a73e8;
+      font-weight: bold;
+    }
+
+    .assistant {
+      color: #111;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-window">
+    <div class="messages" id="messages"></div>
+    <div class="input-area">
+      <input type="text" id="userInput" placeholder="請輸入「測驗」或藥物問題..." />
+      <button onclick="sendMessage()">送出</button>
+    </div>
+  </div>
+
+  <script>
+    const messagesEl = document.getElementById("messages");
+    const userInput = document.getElementById("userInput");
+
+    const API_KEY = "YOUR_OPENAI_API_KEY_HERE"; // ← 請換成你自己的 API 金鑰
+
+    const systemPrompt = `
+你是一個專為新進藥師設計的學習與判斷訓練助手，用於評估藥師是否能正確辨識處方錯誤。當使用者輸入「測驗」時，從案例資料庫中隨機挑選尚未出現過的「教案編號」，並依序呈現該案例的「難易度」、「病人基本資料及診斷」及「處方」內容。在每個藥物的『次劑量』數字後方自動加上「#」字元，並在最後提示：「請問藥物問題是？」。
+
+當使用者輸入回答後，助手會根據檔案中該教案編號的「答案」欄內容逐項比對學員回答，依照以下邏輯進行評估：
+1. 若「答案」為「錯誤」，學員需對該藥品提出與「原因」語意相符的描述，才算答對。
+2. 若「答案」為「正確」，未提及該藥品為正確；若錯誤描述該藥品，則為錯誤。
+3. 若藥品名稱對，但描述不符「原因」，也視為錯誤。
+4. 每次評估為獨立事件，不參考前次結果。
+
+最後回應包括：
+- 第一行：「答案評估結果：」
+- 第二行：「完全正確」、「部分正確」或「完全錯誤」，後加(X/Y) 比例。
+- 第三行完整呈現該教案編號的「答案」，並依答題情況給予鼓勵或建議。
+`;
+
+    let conversation = [
+      { role: "system", content: systemPrompt }
+    ];
+
+    async function sendMessage() {
+      const input = userInput.value.trim();
+      if (!input) return;
+
+      addMessage("user", input);
+      conversation.push({ role: "user", content: input });
+      userInput.value = "";
+
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4",
+          messages: conversation,
+          temperature: 0.5
+        })
+      });
+
+      const data = await response.json();
+      const reply = data.choices[0].message.content;
+      addMessage("assistant", reply);
+      conversation.push({ role: "assistant", content: reply });
+    }
+
+    function addMessage(sender, text) {
+      const msgEl = document.createElement("div");
+      msgEl.classList.add("message", sender);
+      msgEl.textContent = (sender === "user" ? "👤 " : "🤖 ") + text;
+      messagesEl.appendChild(msgEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  </script>
+</body>
+</html>
